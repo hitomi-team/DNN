@@ -26,6 +26,9 @@ class DNNClient:
     
     async def on_ready(self):
         print(f'Connected to Discord - ID: {self.client.user.id} - Shard: {self.client.shard_id}')
+        for guild in self.client.guilds:
+            await self.cache_guild(guild)
+        print(f'Cached {len(self.guild_cache)} guilds.')
     
     async def ensure_webhook(self, channel):
         if channel.id in self.webhook_cache:
@@ -49,7 +52,24 @@ class DNNClient:
             self.guild_cache[guild.id]['users'].append(user.id)
         for emoji in guild.emojis:
             self.guild_cache[guild.id]['emojis'].append(emoji)
+    
+    async def on_guild_join(self, guild):
+        await self.cache_guild(guild)
+    
+    async def on_guild_remove(self, guild):
+        if guild.id in self.guild_cache:
+            del self.guild_cache[guild.id]
+    
+    async def on_guild_emojis_update(self, guild, before, after):
+        if guild.id not in self.guild_cache:
+            return
+        for emoji in after:
+            if emoji not in self.guild_cache[guild.id]['emojis']:
+                self.guild_cache[guild.id]['emojis'].append(emoji)
         
+    async def on_member_join(self, member):
+        self.guild_cache[member.guild.id]['users'].append(member.id)
+
     async def on_message(self, message):
         if message.author.bot:
             return
@@ -62,7 +82,6 @@ class DNNClient:
         for match in real_emoji_matches:
             filtered_content = filtered_content.replace(match, '')
         non_emoji_matches = re.findall(r'\:([a-zA-Z0-9_]+)\:', filtered_content)
-
         if not non_emoji_matches:
             return
 
@@ -78,7 +97,6 @@ class DNNClient:
                             if emoji.animated:
                                 new_msg = new_msg.replace(f':{non_emoji}:', f'<a:{emoji.name}:{emoji.id}>')
                             else:
-                                print(f'{emoji.name} is not animated')
                                 new_msg = new_msg.replace(f':{non_emoji}:', f'<:{emoji.name}:{emoji.id}>')
             
         if new_msg == message.content:
