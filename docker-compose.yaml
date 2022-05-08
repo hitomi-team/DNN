@@ -1,0 +1,15 @@
+version: '3.5'
+
+services:
+    ran:
+        container_name: bot
+        build: .
+        command: python src
+        environment:
+            SECRETS_PATH: /var/run/secrets/secrets_file
+        secrets:
+            - secrets_file
+
+secrets:
+    secrets_file:
+        file: ./secrets.json
