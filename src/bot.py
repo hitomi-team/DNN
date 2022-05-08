@@ -18,6 +18,10 @@ class DNNClient:
         print('Starting Discord Client.')
         self.on_ready = self.client.event(self.on_ready)
         self.on_message = self.client.event(self.on_message)
+        self.on_guild_join = self.client.event(self.on_guild_join)
+        self.on_guild_remove = self.client.event(self.on_guild_remove)
+        self.on_guild_emojis_update = self.client.event(self.on_guild_emojis_update)
+        self.on_member_join = self.client.event(self.on_member_join)
 
         self.client.run(self.token)
     
