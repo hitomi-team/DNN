@@ -95,13 +95,20 @@ class DNNClient:
             # replace non_emoji from :helpme: to <:helpme:717> or <a:helpme:717> if it's an animated emoji
             # only replace emoji if user is in guild that has the emoji
             for g_id in self.guild_cache:
+                replaced = False
                 if message.author.id in self.guild_cache[g_id]['users']:
                     for emoji in self.guild_cache[g_id]['emojis']:
                         if emoji.name.lower() == non_emoji.lower():
                             if emoji.animated:
                                 new_msg = new_msg.replace(f':{non_emoji}:', f'<a:{emoji.name}:{emoji.id}>')
+                                replaced = True
+                                break
                             else:
                                 new_msg = new_msg.replace(f':{non_emoji}:', f'<:{emoji.name}:{emoji.id}>')
+                                replaced = True
+                                break
+                if replaced == True:
+                    break
             
         if new_msg == message.content:
             return
