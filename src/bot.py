@@ -1,155 +1,121 @@
-import re
-import asyncio
 import logging
+import traceback
+
 import discord
+from discord.ext import commands
 
-blurple_color = discord.Color(value=0x5865f2)
+import config
 
-class DNNClient:
-    def __init__(self, config):
-        self.token = config['discord_token']
+description = """
+Allows you to send emojis from servers this bot is in.
+"""
+
+initial_cogs = (
+    'cogs.emoji',
+)
+
+
+def _prefix_callable(bot, msg):
+    user_id = bot.user.id
+    return [f"<@!{user_id}> ", f"<@{user_id}> "]
+
+
+class DNN(commands.AutoShardedBot):
+    def __init__(self):
         logging.getLogger('discord').disabled = True
 
         intents = discord.Intents.all()
-        self.client = discord.AutoShardedClient(intents=intents, status=discord.Status.dnd)
+
+        super().__init__(
+            command_prefix=_prefix_callable,
+            description=description,
+            pm_help=None,
+            help_attrs=dict(hidden=True),
+            intents=intents,
+            status=discord.Status.dnd
+        )
+
         self.webhook_cache = {}
         self.guild_cache = {}
         self.emoji_cache = {}
 
-    def run(self):
-        print('Starting Discord Client.')
-        self.on_ready = self.client.event(self.on_ready)
-        self.on_message = self.client.event(self.on_message)
-        self.on_guild_join = self.client.event(self.on_guild_join)
-        self.on_guild_remove = self.client.event(self.on_guild_remove)
-        self.on_guild_emojis_update = self.client.event(self.on_guild_emojis_update)
-        self.on_member_join = self.client.event(self.on_member_join)
+    async def setup_hook(self):
+        for cog in initial_cogs:
+            try:
+                await self.load_extension(cog)
 
-        self.client.run(self.token)
-    
-    def close(self):
-        asyncio.run(self.client.close())
-    
+            except Exception:
+                print(f"Failed to load cog {cog}.")
+                traceback.print_exc()
+
     async def on_ready(self):
-        print(f'Connected to Discord - ID: {self.client.user.id} - Shard: {self.client.shard_id}')
-        for guild in self.client.guilds:
+        print(f'Connected to Discord - ID: {self.user.id} - Shard: {self.shard_id}')
+
+        for guild in self.guilds:
             await self.cache_guild(guild)
+
         print(f'Cached {len(self.guild_cache)} guilds.')
-    
+
     async def ensure_webhook(self, channel):
         if channel.id in self.webhook_cache:
             return self.webhook_cache[channel.id]
+
         for webhook in await channel.webhooks():
-            if webhook.user.id == self.client.user.id:
+            if webhook.user.id == self.user.id:
                 self.webhook_cache[channel.id] = webhook
                 return webhook
+
         if channel.id in self.webhook_cache:
             return self.webhook_cache[channel.id]
+
         new_webhook = await channel.create_webhook(name='DNN Webhook')
         self.webhook_cache[channel.id] = new_webhook
+
         return new_webhook
-    
+
     async def cache_guild(self, guild):
         # guild_id: {'users': [], 'emojis': []}
         if guild.id in self.guild_cache:
             return
-        self.guild_cache[guild.id] = {'users': [], 'emojis': []}
+
+        self.guild_cache[guild.id] = {'users': set(), 'emojis': {}}
+
         for user in guild.members:
-            self.guild_cache[guild.id]['users'].append(user.id)
+            self.guild_cache[guild.id]['users'].add(user.id)
+
         for emoji in guild.emojis:
-            self.guild_cache[guild.id]['emojis'].append(emoji)
-    
+            self.guild_cache[guild.id]['emojis'][emoji.name] = emoji
+
     async def on_guild_join(self, guild):
         await self.cache_guild(guild)
-    
+
     async def on_guild_remove(self, guild):
         if guild.id in self.guild_cache:
             del self.guild_cache[guild.id]
-    
+
     async def on_guild_emojis_update(self, guild, before, after):
         if guild.id not in self.guild_cache:
             return
+
+        self.guild_cache[guild.id]['emojis'] = {}
+
         for emoji in after:
             if emoji not in self.guild_cache[guild.id]['emojis']:
-                self.guild_cache[guild.id]['emojis'].append(emoji)
-        
+                self.guild_cache[guild.id]['emojis'][emoji.name] = emoji
+
     async def on_member_join(self, member):
         self.guild_cache[member.guild.id]['users'].append(member.id)
 
     async def on_message(self, message):
         if message.author.bot:
             return
-        
-        # check if guild has a bot named NQN, if it does, don't process
-        if message.guild.get_member(559426966151757824):
-            return
-        
-        # regex to check if message has a link like https://discord.com/channels/guild_id/channel_id/message_id
-        match = re.search(r'https://discord.com/channels/(\d+)/(\d+)/(\d+)', message.content)
-        if match:
-            webhook = await self.ensure_webhook(message.channel)
-            await message.delete()
 
-            channel_id = match.group(2)
-            message_id = match.group(3)
-            channel = self.client.get_channel(int(channel_id))
-            if channel is None:
-                return
-            ref_message = await channel.fetch_message(int(message_id))
-            if ref_message is None:
-                return
-            
-            embed = discord.Embed(title='Jump to message', url=ref_message.jump_url, color=blurple_color)
-            embed.description = ref_message.content
-            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
-            embed.set_footer(text=f'#{ref_message.channel.name}')
-            await webhook.send(embed=embed, username=message.author.name, avatar_url=message.author.avatar.url)
+    async def start(self):
+        await super().start(config.token, reconnect=True)
 
-        await self.cache_guild(message.guild)
-        real_emoji_matches = re.findall(r'\<[^>]*\>', message.content)
-        filtered_content = ''
-        if not real_emoji_matches:
-            filtered_content = message.content
-        for match in real_emoji_matches:
-            filtered_content = filtered_content.replace(match, '')
-        non_emoji_matches = re.findall(r'\:([a-zA-Z0-9_]+)\:', filtered_content)
-        if not non_emoji_matches:
-            return
+    async def close(self):
+        await super().close()
 
-        new_msg = message.content
-
-        for non_emoji in non_emoji_matches:
-            # replace non_emoji from :helpme: to <:helpme:717> or <a:helpme:717> if it's an animated emoji
-            # only replace emoji if user is in guild that has the emoji
-            for g_id in self.guild_cache:
-                replaced = False
-                if message.author.id in self.guild_cache[g_id]['users']:
-                    for emoji in self.guild_cache[g_id]['emojis']:
-                        if emoji.name.lower() == non_emoji.lower():
-                            if emoji.animated:
-                                new_msg = new_msg.replace(f':{non_emoji}:', f'<a:{emoji.name}:{emoji.id}>')
-                                replaced = True
-                                break
-                            else:
-                                new_msg = new_msg.replace(f':{non_emoji}:', f'<:{emoji.name}:{emoji.id}>')
-                                replaced = True
-                                break
-                if replaced == True:
-                    break
-            
-        if new_msg == message.content:
-            return
-        
-        webhook = await self.ensure_webhook(message.channel)
-        await message.delete()
-        if message.reference is not None:
-            # create embed with message reference
-            message_id = message.reference.message_id
-            ref_message = await message.channel.fetch_message(message_id)
-            embed = discord.Embed(title='Jump to message', url=message.reference.jump_url, color=blurple_color)
-            if ref_message:
-                embed.description = ref_message.content
-            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
-            await webhook.send(content=new_msg, embed=embed, username=message.author.name, avatar_url=message.author.avatar.url)
-        else:
-            await webhook.send(new_msg, username=message.author.name, avatar_url=message.author.avatar.url)
+    @property
+    def config(self):
+        return __import__("config")
