@@ -3,6 +3,8 @@ import asyncio
 import logging
 import discord
 
+blurple_color = discord.Color(value=0x5865f2)
+
 class DNNClient:
     def __init__(self, config):
         self.token = config['discord_token']
@@ -77,6 +79,31 @@ class DNNClient:
     async def on_message(self, message):
         if message.author.bot:
             return
+        
+        # check if guild has a bot named NQN, if it does, don't process
+        if message.guild.get_member(559426966151757824):
+            return
+        
+        # regex to check if message has a link like https://discord.com/channels/guild_id/channel_id/message_id
+        match = re.search(r'https://discord.com/channels/(\d+)/(\d+)/(\d+)', message.content)
+        if match:
+            webhook = await self.ensure_webhook(message.channel)
+            await message.delete()
+
+            channel_id = match.group(2)
+            message_id = match.group(3)
+            channel = self.client.get_channel(int(channel_id))
+            if channel is None:
+                return
+            ref_message = await channel.fetch_message(int(message_id))
+            if ref_message is None:
+                return
+            
+            embed = discord.Embed(title='Jump to message', url=ref_message.jump_url, color=blurple_color)
+            embed.description = ref_message.content
+            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
+            embed.set_footer(text=f'#{ref_message.channel.name}')
+            await webhook.send(embed=embed, username=message.author.name, avatar_url=message.author.avatar.url)
 
         await self.cache_guild(message.guild)
         real_emoji_matches = re.findall(r'\<[^>]*\>', message.content)
@@ -112,7 +139,17 @@ class DNNClient:
             
         if new_msg == message.content:
             return
-            
+        
         webhook = await self.ensure_webhook(message.channel)
         await message.delete()
-        await webhook.send(new_msg, username=message.author.name, avatar_url=message.author.avatar.url)
+        if message.reference is not None:
+            # create embed with message reference
+            message_id = message.reference.message_id
+            ref_message = await message.channel.fetch_message(message_id)
+            embed = discord.Embed(title='Jump to message', url=message.reference.jump_url, color=blurple_color)
+            if ref_message:
+                embed.description = ref_message.content
+            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
+            await webhook.send(content=new_msg, embed=embed, username=message.author.name, avatar_url=message.author.avatar.url)
+        else:
+            await webhook.send(new_msg, username=message.author.name, avatar_url=message.author.avatar.url)
