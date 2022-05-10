@@ -29,7 +29,7 @@ class Emoji(commands.Cog):
     def get_avatar(self, msg):
         # people with default avatars will have a null avatar_url
         if msg.author.avatar is not None:
-            return msg.author.avatar_url
+            return msg.author.avatar.url
         else:
             return None
 
@@ -65,17 +65,21 @@ class Emoji(commands.Cog):
 
             embed = discord.Embed(title='Jump to message', url=ref_message.jump_url, color=BLURPLE_COLOR)
 
+            # check for attachments
+            if ref_message.attachments:
+                embed.set_image(url=ref_message.attachments[0].url)
+
             embed.description = ref_message.content
             embed.set_author(
                 name=ref_message.author.name,
-                icon_url=ref_message.author.avatar.url
+                icon_url=self.get_avatar(ref_message),
             )
             embed.set_footer(text=f'#{ref_message.channel.name}')
 
             await webhook.send(
                 embed=embed,
                 username=msg.author.name,
-                avatar_url=msg.author.avatar.url
+                avatar_url=self.get_avatar(msg),
             )
 
         filtered_content = self.clean_emojis(msg.content)
@@ -111,6 +115,10 @@ class Emoji(commands.Cog):
 
             if ref_message:
                 embed.description = ref_message.content
+
+                # check for attachments
+                if ref_message.attachments:
+                    embed.set_image(url=ref_message.attachments[0].url)
             
             embed.set_author(name=ref_message.author.name, icon_url=self.get_avatar(ref_message))
             await webhook.send(content=new_msg, embed=embed, username=msg.author.name, avatar_url=self.get_avatar(msg))
