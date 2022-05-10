@@ -4,6 +4,7 @@ import traceback
 import discord
 from discord.ext import commands
 
+from cogs.utils.dnn_cache import DNNCache
 import config
 
 description = """
@@ -35,9 +36,9 @@ class DNN(commands.AutoShardedBot):
             status=discord.Status.dnd
         )
 
+        self.dnn_cache = DNNCache()
+
         self.webhook_cache = {}
-        self.guild_cache = {}
-        self.emoji_cache = {}
 
     async def setup_hook(self):
         for cog in initial_cogs:
@@ -51,60 +52,27 @@ class DNN(commands.AutoShardedBot):
     async def on_ready(self):
         print(f'Connected to Discord - ID: {self.user.id} - Shard: {self.shard_id}')
 
+        self.dnn_cache.user_id = self.user.id
+
         for guild in self.guilds:
-            await self.cache_guild(guild)
+            self.dnn_cache.cache_guild(guild)
 
-        print(f'Cached {len(self.guild_cache)} guilds.')
-
-    async def ensure_webhook(self, channel):
-        if channel.id in self.webhook_cache:
-            return self.webhook_cache[channel.id]
-
-        for webhook in await channel.webhooks():
-            if webhook.user.id == self.user.id:
-                self.webhook_cache[channel.id] = webhook
-                return webhook
-
-        if channel.id in self.webhook_cache:
-            return self.webhook_cache[channel.id]
-
-        new_webhook = await channel.create_webhook(name='DNN Webhook')
-        self.webhook_cache[channel.id] = new_webhook
-
-        return new_webhook
-
-    async def cache_guild(self, guild):
-        # guild_id: {'users': [], 'emojis': []}
-        if guild.id in self.guild_cache:
-            return
-
-        self.guild_cache[guild.id] = {'users': set(), 'emojis': {}}
-
-        for user in guild.members:
-            self.guild_cache[guild.id]['users'].add(user.id)
-
-        for emoji in guild.emojis:
-            self.guild_cache[guild.id]['emojis'][emoji.name] = emoji
+        print(f'Cached {len(self.dnn_cache.guild_cache)} guilds.')
 
     async def on_guild_join(self, guild):
-        await self.cache_guild(guild)
+        self.dnn_cache.cache_guild(guild)
 
     async def on_guild_remove(self, guild):
-        if guild.id in self.guild_cache:
-            del self.guild_cache[guild.id]
+        self.dnn_cache.remove_guild(guild)
 
     async def on_guild_emojis_update(self, guild, before, after):
-        if guild.id not in self.guild_cache:
-            return
-
-        self.guild_cache[guild.id]['emojis'] = {}
-
-        for emoji in after:
-            if emoji not in self.guild_cache[guild.id]['emojis']:
-                self.guild_cache[guild.id]['emojis'][emoji.name] = emoji
+        self.dnn_cache.update_emojis(guild, before, after)
 
     async def on_member_join(self, member):
-        self.guild_cache[member.guild.id]['users'].append(member.id)
+        self.dnn_cache.cache_member(member)
+
+    async def on_member_remove(self, member):
+        self.dnn_cache.remove_member(member)
 
     async def on_message(self, message):
         if message.author.bot:

@@ -14,12 +14,12 @@ class Emoji(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def clean_emojis(msg):
-        emoji_matches = re.findall(EMOJI_REGEX, msg.content)
+    def clean_emojis(self, msg):
+        emoji_matches = re.findall(EMOJI_REGEX, msg)
         filtered_content = ''
 
         if not emoji_matches:
-            filtered_content = msg.content
+            filtered_content = msg
 
         for match in emoji_matches:
             filtered_content = filtered_content.replace(match, '')
@@ -35,17 +35,18 @@ class Emoji(commands.Cog):
         if msg.guild.get_member(559426966151757824):
             return
 
+        webhook = await self.bot.dnn_cache.get_or_create_webhook(msg.channel)
+
         # regex to check if message has a link like https://discord.com/channels/guild_id/channel_id/message_id
         msg_link_match = re.search(MSG_LINK_REGEX, msg.content)
 
         if msg_link_match:
-            webhook = await self.bot.ensure_webhook(msg.channel)
             await msg.delete()
 
             channel_id = msg_link_match.group(2)
             message_id = msg_link_match.group(3)
 
-            channel = self.bot.client.get_channel(int(channel_id))
+            channel = self.bot.get_channel(int(channel_id))
 
             if channel is None:
                 return
@@ -58,10 +59,17 @@ class Emoji(commands.Cog):
             embed = discord.Embed(title='Jump to message', url=ref_message.jump_url, color=BLURPLE_COLOR)
 
             embed.description = ref_message.content
-            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
+            embed.set_author(
+                name=ref_message.author.name,
+                icon_url=ref_message.author.avatar.url
+            )
             embed.set_footer(text=f'#{ref_message.channel.name}')
 
-            await webhook.send(embed=embed, username=msg.author.name, avatar_url=msg.author.avatar.url)
+            await webhook.send(
+                embed=embed,
+                username=msg.author.name,
+                avatar_url=msg.author.avatar.url
+            )
 
         filtered_content = self.clean_emojis(msg.content)
         non_emoji_matches = re.findall(NON_EMOJI_REGEX, filtered_content)
@@ -73,27 +81,19 @@ class Emoji(commands.Cog):
         replaced = False
 
         for non_emoji in non_emoji_matches:
-            # replace non_emoji from :helpme: to <:helpme:717> or <a:helpme:717> if it's an animated emoji
-            # only replace emoji if user is in guild that has the emoji
-            for g_id in self.bot.guild_cache:
-                if msg.author.id in self.bot.guild_cache[g_id]['users']:
-                    if non_emoji in self.bot.guild_cache[g_id]['emojis']:
-                        emoji = self.bot.guild_cache[g_id]['emojis'][non_emoji]
+            emoji = self.bot.dnn_cache.get_emoji(msg.guild.id, msg.author.id, non_emoji)
 
-                        new_msg = new_msg.replace(
-                            f":{non_emoji}:",
-                            f"<{'a' if emoji.animated else ''}:{emoji.name}:{emoji.id}>"
-                        )
+            if emoji is not None:
+                new_msg = new_msg.replace(
+                    f":{non_emoji}:",
+                    f"<{'a' if emoji.animated else ''}:{emoji.name}:{emoji.id}>"
+                )
 
-                        replaced = True
-
-                if replaced:
-                    break
+                replaced = True
 
         if not replaced:
             return
 
-        webhook = await self.bot.ensure_webhook(msg.channel)
         await msg.delete()
 
         if msg.reference is not None:
