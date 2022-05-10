@@ -25,6 +25,13 @@ class Emoji(commands.Cog):
             filtered_content = filtered_content.replace(match, '')
 
         return filtered_content
+    
+    def get_avatar(self, msg):
+        # people with default avatars will have a null avatar_url
+        if msg.author.avatar is not None:
+            return msg.author.avatar_url
+        else:
+            return None
 
     @commands.Cog.listener("on_message")
     async def on_message(self, msg):
@@ -104,13 +111,12 @@ class Emoji(commands.Cog):
 
             if ref_message:
                 embed.description = ref_message.content
-
-            embed.set_author(name=ref_message.author.name, icon_url=ref_message.author.avatar.url)
-            await webhook.send(content=new_msg, embed=embed, username=msg.author.name, avatar_url=msg.author.avatar.url)
+            
+            embed.set_author(name=ref_message.author.name, icon_url=self.get_avatar(ref_message))
+            await webhook.send(content=new_msg, embed=embed, username=msg.author.name, avatar_url=self.get_avatar(msg))
 
         else:
-            await webhook.send(new_msg, username=msg.author.name, avatar_url=msg.author.avatar.url)
-
-
+            await webhook.send(new_msg, username=msg.author.name, avatar_url=self.get_avatar(msg))
+        
 async def setup(bot):
     await bot.add_cog(Emoji(bot))
