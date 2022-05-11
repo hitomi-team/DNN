@@ -26,8 +26,6 @@ class Emoji(commands.Cog):
 
         return filtered_content
     
-    def in_guild(self, author_id, guild_id):
-    
     def get_avatar(self, msg):
         # people with default avatars will have a null avatar_url
         if msg.author.avatar is not None:
