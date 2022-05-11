@@ -26,6 +26,8 @@ class Emoji(commands.Cog):
 
         return filtered_content
     
+    def in_guild(self, author_id, guild_id):
+    
     def get_avatar(self, msg):
         # people with default avatars will have a null avatar_url
         if msg.author.avatar is not None:
@@ -49,9 +51,13 @@ class Emoji(commands.Cog):
 
         if msg_link_match:
             await msg.delete()
-
+            
+            guild_id = msg_link_match.group(1)
             channel_id = msg_link_match.group(2)
             message_id = msg_link_match.group(3)
+            
+            if (guild_id not in self.bot.dnn_cache.guild_cache) or (not self.bot.dnn_cache.guild_cache[guild_id]['users'][msg.author.id]):
+                return # user does not have access to guild
 
             channel = self.bot.get_channel(int(channel_id))
 
