@@ -4,8 +4,8 @@ import traceback
 import discord
 from discord.ext import commands
 
+from cogs.utils.config import BOT_TOKEN
 from cogs.utils.dnn_cache import DNNCache
-import config
 
 description = """
 Allows you to send emojis from servers this bot is in.
@@ -79,11 +79,7 @@ class DNN(commands.AutoShardedBot):
             return
 
     async def start(self):
-        await super().start(config.token, reconnect=True)
+        await super().start(BOT_TOKEN, reconnect=True)
 
     async def close(self):
         await super().close()
-
-    @property
-    def config(self):
-        return __import__("config")

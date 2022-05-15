@@ -3,9 +3,7 @@ ENV PYTHONUNBUFFERED 1
 
 RUN mkdir /dnn-bot
 WORKDIR /dnn-bot
+COPY . /dnn-bot/
 
-COPY requirements.txt /dnn-bot
+RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
-
-COPY . /dnn-bot
-
