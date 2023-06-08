@@ -80,7 +80,10 @@ class Emoji(commands.Cog):
             )
             embed.set_footer(text=f'#{ref_message.channel.name}')
 
+            msgtext = msg.content.replace(msg_link_match.group(0), f"[message link]({msg_link_match.group(0)})") if not msg.content == msg_link_match.group(0) else ""
+
             await webhook.send(
+                content=msgtext,
                 embed=embed,
                 username=msg.author.name,
                 avatar_url=self.get_avatar(msg),
